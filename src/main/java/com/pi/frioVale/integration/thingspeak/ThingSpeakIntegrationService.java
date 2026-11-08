@@ -9,27 +9,37 @@ import org.springframework.web.client.RestClient;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 /**
  * Cliente da REST API do ThingSpeak.
- * Tolerante a falhas: erro de rede/HTTP/JSON vira Optional.empty() + log, sem derrubar o agendador.
+ * Tolerante a falhas: erro de rede/HTTP/JSON vira lista vazia/Optional.empty() + log,
+ * sem derrubar o agendador.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ThingSpeakIntegrationService {
 
+    /** Limite defensivo para o parâmetro results da API do ThingSpeak. */
+    private static final int MAX_RESULTS = 8000;
+
     private final RestClient thingSpeakRestClient;
     private final Clock clock;
 
     /** GET /channels/{channel_id}/feeds.json?api_key={api_key}&results=1 */
     public Optional<ThingSpeakResponseDTO> fetchLatest(String channelId, String apiKey) {
+        return fetch(channelId, apiKey, 1);
+    }
+
+    private Optional<ThingSpeakResponseDTO> fetch(String channelId, String apiKey, int results) {
+        int safeResults = Math.max(1, Math.min(results, MAX_RESULTS));
         try {
             ThingSpeakResponseDTO body = thingSpeakRestClient.get()
                     .uri(uri -> {
-                        uri.path("/channels/{id}/feeds.json").queryParam("results", 1);
+                        uri.path("/channels/{id}/feeds.json").queryParam("results", safeResults);
                         if (StringUtils.hasText(apiKey)) {      // canais públicos dispensam a chave
                             uri.queryParam("api_key", "{key}");
                         }
@@ -45,14 +55,25 @@ public class ThingSpeakIntegrationService {
         }
     }
 
-    /** Consulta o canal e já devolve a última leitura convertida; vazio se não houver dado utilizável. */
-    public Optional<ThingSpeakReading> fetchLatestReading(String channelId, String apiKey) {
-        return fetchLatest(channelId, apiKey)
+    /**
+     * Busca as últimas {@code results} entradas do canal e já converte para tipos Java.
+     * Ideal para alimentar a tela de logs do IoT.
+     */
+    public List<ThingSpeakReading> fetchRecentReadings(String channelId, String apiKey, int results) {
+        List<ThingSpeakResponseDTO.Feed> feeds = fetch(channelId, apiKey, results)
                 .map(ThingSpeakResponseDTO::feeds)
-                .filter(feeds -> !feeds.isEmpty())
-                .map(feeds -> feeds.get(feeds.size() - 1))
-                .map(this::toReading)
-                .filter(r -> r.temperature() != null);   // sem temperatura não há o que validar
+                .orElseGet(List::of);
+        return feeds.stream().map(this::toReading).toList();
+    }
+
+    /** Consulta o canal e devolve a última leitura com temperatura; vazio se não houver dado utilizável. */
+    public Optional<ThingSpeakReading> fetchLatestReading(String channelId, String apiKey) {
+        List<ThingSpeakReading> readings = fetchRecentReadings(channelId, apiKey, 1);
+        if (readings.isEmpty()) {
+            return Optional.empty();
+        }
+        ThingSpeakReading latest = readings.get(readings.size() - 1);
+        return latest.temperature() == null ? Optional.empty() : Optional.of(latest);
     }
 
     private ThingSpeakReading toReading(ThingSpeakResponseDTO.Feed feed) {

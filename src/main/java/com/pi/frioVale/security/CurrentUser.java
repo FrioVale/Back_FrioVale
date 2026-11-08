@@ -6,8 +6,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
-/** Acesso ao usuario autenticado da requisicao HTTP atual (id = subject do JWT). */
-@Component
 public class CurrentUser {
 
     public Long id() {

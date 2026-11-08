@@ -3,7 +3,6 @@ package com.pi.frioVale.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -19,36 +18,27 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 /**
- * API stateless protegida por JWT (Bearer).
- * Perfis: ROLE_COMPANY (gestor) e ROLE_DRIVER (motorista).
- * Regras que dependem do dono da viagem (motorista so ve as proprias) ficam no TripService.
+ * Segurança da API com JWT (HS256). Os beans de assinatura/validação do token
+ * ficam em {@link JwtConfig}. Login e cadastro são públicos; as demais rotas
+ * exigem um token válido.
  */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http,
-                                                   JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
         http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/error").permitAll()
-                        // Handshake do WebSocket e livre; o token e validado no CONNECT do STOMP
-                        .requestMatchers("/ws/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                        // Gestor cadastra usuarios e consulta motoristas
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register").hasRole("COMPANY")
-                        .requestMatchers("/api/users/**").hasRole("COMPANY")
-                        // Gestor cadastra frutas e cria/inicia/finaliza viagens
-                        .requestMatchers(HttpMethod.POST, "/api/fruits").hasRole("COMPANY")
-                        .requestMatchers(HttpMethod.POST, "/api/trips/**").hasRole("COMPANY")
-                        // Demais rotas: qualquer usuario autenticado (filtro por dono no service)
+                        .requestMatchers("/api/auth/login", "/api/auth/register", "/ws/**", "/error").permitAll()
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth -> oauth
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)));
+                .oauth2ResourceServer(oauth -> oauth.jwt(
+                        jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)));
         return http.build();
     }
 

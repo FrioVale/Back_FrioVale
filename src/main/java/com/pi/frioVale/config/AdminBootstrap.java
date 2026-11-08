@@ -13,11 +13,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.Locale;
 
-/**
- * Cria o primeiro gestor na subida, se ainda nao existir nenhum e as propriedades
- * friovale.bootstrap.admin-email / admin-password estiverem preenchidas.
- * Depois do primeiro uso, remova essas propriedades.
- */
+
 @Slf4j
 @Component
 @RequiredArgsConstructor

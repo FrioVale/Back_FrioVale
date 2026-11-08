@@ -24,6 +24,9 @@ public class User {
     @Column(nullable = false, unique = true, length = 160)
     private String email;
 
+    @Column(length = 20)
+    private String phone;
+
     /** Hash BCrypt, nunca a senha em texto puro. */
     @Column(nullable = false)
     private String password;

@@ -3,6 +3,7 @@ package com.pi.frioVale.integration.thingspeak;
 import com.pi.frioVale.domain.Container;
 import com.pi.frioVale.domain.Trip;
 import com.pi.frioVale.service.TelemetryService;
+import com.pi.frioVale.service.ThingSpeakLogService;
 import com.pi.frioVale.service.TripService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,15 +13,19 @@ import org.springframework.util.StringUtils;
 
 import java.util.List;
 
-/** A cada 15 s consulta o ThingSpeak dos contêineres com viagem IN_TRANSIT e grava a telemetria. */
+/** A cada 15 s consulta o ThingSpeak dos contêineres com viagem IN_TRANSIT e grava logs + telemetria. */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class ThingSpeakPollingScheduler {
 
+    /** Quantidade de entradas recentes buscadas por canal para alimentar a tela de logs. */
+    private static final int RECENT_RESULTS = 20;
+
     private final TripService tripService;
     private final ThingSpeakIntegrationService thingSpeak;
     private final TelemetryService telemetryService;
+    private final ThingSpeakLogService thingSpeakLogService;
 
     @Scheduled(fixedRateString = "${friovale.thingspeak.poll-rate-ms:15000}")
     public void poll() {
@@ -40,13 +45,45 @@ public class ThingSpeakPollingScheduler {
         }
     }
 
+    /**
+     * Mantém a tela de logs alimentada mesmo quando não há viagem em andamento.
+     * Consulta todos os contêineres cadastrados em um intervalo maior para
+     * respeitar o limite de leituras do ThingSpeak.
+     */
+    @Scheduled(
+            fixedRateString = "${friovale.thingspeak.log-sync-rate-ms:300000}",
+            initialDelayString = "${friovale.thingspeak.log-sync-initial-delay-ms:30000}")
+    public void syncAllLogs() {
+        try {
+            int saved = thingSpeakLogService.sync(null, RECENT_RESULTS);
+            if (saved > 0) {
+                log.debug("Sincronização periódica do ThingSpeak gravou {} novo(s) log(s)", saved);
+            }
+        } catch (RuntimeException ex) {
+            log.error("Falha ao sincronizar logs do ThingSpeak: {}", ex.getMessage());
+        }
+    }
+
     private void pollTrip(Trip trip) {
         Container container = trip.getContainer();
         if (!StringUtils.hasText(container.getThingSpeakChannelId())) {
             log.warn("Contêiner {} sem canal ThingSpeak configurado", container.getCode());
             return;
         }
-        thingSpeak.fetchLatestReading(container.getThingSpeakChannelId(), container.getThingSpeakApiKey())
+
+        List<ThingSpeakReading> readings = thingSpeak.fetchRecentReadings(
+                container.getThingSpeakChannelId(), container.getThingSpeakApiKey(), RECENT_RESULTS);
+        if (readings.isEmpty()) {
+            return;
+        }
+
+        // Guarda o histórico bruto do IoT para a tela de logs.
+        thingSpeakLogService.saveReadings(container, readings);
+
+        // A telemetria da viagem usa a entrada mais recente que possui temperatura.
+        readings.stream()
+                .filter(reading -> reading.temperature() != null)
+                .reduce((first, second) -> second)
                 .ifPresent(reading -> telemetryService.registerReading(trip.getId(), reading));
     }
 }

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
+    Optional<User> findByEmail(String email);
 
     Optional<User> findByEmailIgnoreCase(String email);
 
@@ -16,4 +17,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByRole(Role role);
 
     List<User> findByRoleOrderByNameAsc(Role role);
+
+    Optional<User> findFirstByRoleOrderByIdAsc(Role role);
+
+    Optional<User> findFirstByOrderByIdAsc();
 }

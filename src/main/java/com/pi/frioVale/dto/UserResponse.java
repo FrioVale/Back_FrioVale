@@ -3,10 +3,14 @@ package com.pi.frioVale.dto;
 import com.pi.frioVale.domain.User;
 import com.pi.frioVale.domain.enums.Role;
 
-/** Nunca inclui a senha. */
-public record UserResponse(Long id, String name, String email, Role role) {
-
-    public static UserResponse from(User u) {
-        return new UserResponse(u.getId(), u.getName(), u.getEmail(), u.getRole());
+public record UserResponse(
+        Long id,
+        String name,
+        String email,
+        String phone,
+        Role role
+) {
+    public static UserResponse from(User user) {
+        return new UserResponse(user.getId(), user.getName(), user.getEmail(), user.getPhone(), user.getRole());
     }
 }

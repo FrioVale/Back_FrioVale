@@ -4,6 +4,7 @@ import com.pi.frioVale.domain.Trip;
 import com.pi.frioVale.domain.enums.TripStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,12 +15,11 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     List<Trip> findByStatus(TripStatus status);
 
     @EntityGraph(attributePaths = {"container", "driver", "fruit"})
-    List<Trip> findByStatusAndDriverId(TripStatus status, Long driverId);
-
-    @EntityGraph(attributePaths = {"container", "driver", "fruit"})
     Optional<Trip> findDetailedById(Long id);
 
-    boolean existsByContainerIdAndStatus(Long containerId, TripStatus status);
+    @EntityGraph(attributePaths = {"container", "driver", "fruit"})
+    @Query("select t from Trip t order by t.id desc")
+    List<Trip> findAllDetailed();
 
-    boolean existsByIdAndDriverId(Long id, Long driverId);
+    boolean existsByContainerIdAndStatus(Long containerId, TripStatus status);
 }

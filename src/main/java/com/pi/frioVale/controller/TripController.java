@@ -2,6 +2,7 @@ package com.pi.frioVale.controller;
 
 import com.pi.frioVale.dto.AlertResponse;
 import com.pi.frioVale.dto.TelemetryResponse;
+import com.pi.frioVale.dto.TripMonitorResponse;
 import com.pi.frioVale.dto.TripRequest;
 import com.pi.frioVale.dto.TripResponse;
 import com.pi.frioVale.service.TelemetryService;
@@ -35,6 +36,17 @@ public class TripController {
     @GetMapping("/active")
     public List<TripResponse> listActive() {
         return tripService.findActive();
+    }
+
+    /** Lista todas as viagens com última leitura e indicadores (dados vindos do banco). */
+    @GetMapping
+    public List<TripMonitorResponse> list() {
+        return tripService.findAllMonitor();
+    }
+
+    @GetMapping("/active/monitor")
+    public List<TripMonitorResponse> listActiveMonitor() {
+        return tripService.findActiveMonitor();
     }
 
     @GetMapping("/{id}/telemetry")

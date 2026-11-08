@@ -1,34 +1,60 @@
 package com.pi.frioVale.service;
 
+import com.pi.frioVale.config.JwtProperties;
 import com.pi.frioVale.domain.User;
+import com.pi.frioVale.dto.AuthResponse;
 import com.pi.frioVale.dto.LoginRequest;
-import com.pi.frioVale.dto.LoginResponse;
+import com.pi.frioVale.dto.RegisterRequest;
+import com.pi.frioVale.dto.UserResponse;
+import com.pi.frioVale.exception.BusinessRuleException;
 import com.pi.frioVale.repository.UserRepository;
 import com.pi.frioVale.security.JwtTokenService;
-import com.pi.frioVale.security.JwtTokenService.IssuedToken;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Locale;
+
+/** Regras de autenticação: login, cadastro e emissão do token JWT. */
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final UserService userService;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
+    private final JwtProperties jwtProperties;
 
     @Transactional(readOnly = true)
-    public LoginResponse login(LoginRequest request) {
-        // Mesma mensagem para e-mail inexistente e senha errada (nao revela quais e-mails existem)
-        User user = userRepository.findByEmailIgnoreCase(request.email().trim())
-                .filter(u -> passwordEncoder.matches(request.password(), u.getPassword()))
-                .orElseThrow(() -> new BadCredentialsException("E-mail ou senha invalidos"));
+    public AuthResponse login(LoginRequest request) {
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
+        User user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(AuthService::invalidCredentials);
 
-        IssuedToken issued = jwtTokenService.issue(user);
-        return new LoginResponse(issued.token(), "Bearer", issued.expiresAt(),
-                user.getId(), user.getName(), user.getEmail(), user.getRole());
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            throw invalidCredentials();
+        }
+
+        return response(user);
+    }
+
+    @Transactional
+    public AuthResponse register(RegisterRequest request) {
+        UserResponse created = userService.register(request);
+        User user = userRepository.findById(created.id())
+                .orElseThrow(AuthService::invalidCredentials);
+        return response(user);
+    }
+
+    private AuthResponse response(User user) {
+        JwtTokenService.IssuedToken issued = jwtTokenService.issue(user);
+        return AuthResponse.bearer(issued.token(), jwtProperties.expirationMinutes(), UserResponse.from(user));
+    }
+
+    private static BusinessRuleException invalidCredentials() {
+        return new BusinessRuleException("E-mail ou senha inválidos", HttpStatus.UNAUTHORIZED);
     }
 }
