@@ -31,6 +31,14 @@ public class Trip {
     @JoinColumn(name = "fruit_id", nullable = false)
     private Fruit fruit;
 
+    /** Origem da rota (opcional, informada no cadastro da viagem). */
+    @Column(length = 120)
+    private String origin;
+
+    /** Destino da rota (opcional, informado no cadastro da viagem). */
+    @Column(length = 120)
+    private String destination;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default

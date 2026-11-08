@@ -11,7 +11,11 @@ import java.time.ZoneId;
 
 @Configuration
 @EnableScheduling
-@EnableConfigurationProperties(ThingSpeakProperties.class)
+@EnableConfigurationProperties({
+        ThingSpeakProperties.class,
+        JwtProperties.class,
+        BootstrapProperties.class
+})
 public class AppConfig {
 
     /** Relógio único da aplicação (fuso configurável), facilita testes e mantém datas consistentes. */

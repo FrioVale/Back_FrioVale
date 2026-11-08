@@ -13,6 +13,8 @@ public record TripResponse(
         String driverName,
         Long fruitId,
         String fruitName,
+        String origin,
+        String destination,
         TripStatus status,
         LocalDateTime startDate,
         LocalDateTime endDate
@@ -24,6 +26,7 @@ public record TripResponse(
                 t.getContainer().getId(), t.getContainer().getCode(),
                 t.getDriver().getId(), t.getDriver().getName(),
                 t.getFruit().getId(), t.getFruit().getName(),
+                t.getOrigin(), t.getDestination(),
                 t.getStatus(), t.getStartDate(), t.getEndDate());
     }
 }

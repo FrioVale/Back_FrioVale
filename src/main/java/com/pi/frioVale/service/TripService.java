@@ -2,22 +2,26 @@ package com.pi.frioVale.service;
 
 import com.pi.frioVale.domain.Container;
 import com.pi.frioVale.domain.Fruit;
+import com.pi.frioVale.domain.Telemetry;
 import com.pi.frioVale.domain.Trip;
 import com.pi.frioVale.domain.User;
 import com.pi.frioVale.domain.enums.Role;
 import com.pi.frioVale.domain.enums.TripStatus;
+import com.pi.frioVale.dto.TripMonitorResponse;
 import com.pi.frioVale.dto.TripRequest;
 import com.pi.frioVale.dto.TripResponse;
 import com.pi.frioVale.exception.BusinessRuleException;
 import com.pi.frioVale.exception.ResourceNotFoundException;
 import com.pi.frioVale.repository.ContainerRepository;
 import com.pi.frioVale.repository.FruitRepository;
+import com.pi.frioVale.repository.TelemetryRepository;
 import com.pi.frioVale.repository.TripRepository;
 import com.pi.frioVale.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -31,6 +35,7 @@ public class TripService {
     private final ContainerRepository containerRepository;
     private final UserRepository userRepository;
     private final FruitRepository fruitRepository;
+    private final TelemetryRepository telemetryRepository;
     private final Clock clock;
 
     /** Cadastra a viagem e, por padrão, já a inicia (IN_TRANSIT). */
@@ -51,6 +56,8 @@ public class TripService {
                 .container(container)
                 .driver(driver)
                 .fruit(fruit)
+                .origin(normalize(request.origin()))
+                .destination(normalize(request.destination()))
                 .status(TripStatus.PLANNED)
                 .build();
 
@@ -94,6 +101,66 @@ public class TripService {
         return tripRepository.findByStatus(TripStatus.IN_TRANSIT);
     }
 
+    /** Todas as viagens com a última leitura e indicadores calculados a partir do banco. */
+    @Transactional(readOnly = true)
+    public List<TripMonitorResponse> findAllMonitor() {
+        return tripRepository.findAllDetailed().stream().map(this::toMonitor).toList();
+    }
+
+    /** Apenas viagens em andamento, no formato consumido pela visão geral. */
+    @Transactional(readOnly = true)
+    public List<TripMonitorResponse> findActiveMonitor() {
+        return tripRepository.findByStatus(TripStatus.IN_TRANSIT).stream().map(this::toMonitor).toList();
+    }
+
+    /**
+     * Verifica se o usuário pode acessar a viagem.
+     * Empresa (isCompany = true) acessa qualquer viagem; motorista acessa apenas as próprias.
+     */
+    @Transactional(readOnly = true)
+    public boolean canAccessTrip(Long tripId, Long userId, boolean isCompany) {
+        if (isCompany) {
+            return tripRepository.existsById(tripId);
+        }
+        return tripRepository.findDetailedById(tripId)
+                .filter(trip -> trip.getDriver() != null)
+                .map(trip -> trip.getDriver().getId().equals(userId))
+                .orElse(false);
+    }
+
+    private TripMonitorResponse toMonitor(Trip trip) {
+        Long tripId = trip.getId();
+        Fruit fruit = trip.getFruit();
+        Telemetry latest = telemetryRepository.findFirstByTripIdOrderByTimestampDesc(tripId).orElse(null);
+        long readings = telemetryRepository.countByTripId(tripId);
+        long readingsInRange = telemetryRepository.countInRangeByTripId(
+                tripId, fruit.getMinTemp(), fruit.getMaxTemp());
+        Integer inRangePercent = readings == 0
+                ? null
+                : (int) Math.round(readingsInRange * 100.0 / readings);
+        Boolean inRange = null;
+        if (latest != null && latest.getTemperature() != null) {
+            double temperature = latest.getTemperature();
+            inRange = temperature >= fruit.getMinTemp() && temperature <= fruit.getMaxTemp();
+        }
+
+        return new TripMonitorResponse(
+                tripId,
+                trip.getContainer().getId(), trip.getContainer().getCode(),
+                trip.getDriver().getId(), trip.getDriver().getName(),
+                fruit.getId(), fruit.getName(),
+                fruit.getMinTemp(), fruit.getMaxTemp(),
+                fruit.getMinHumidity(), fruit.getMaxHumidity(),
+                trip.getOrigin(), trip.getDestination(),
+                trip.getStatus(), trip.getStartDate(), trip.getEndDate(),
+                latest == null ? null : latest.getTemperature(),
+                latest == null ? null : latest.getHumidity(),
+                latest == null ? null : latest.getLatitude(),
+                latest == null ? null : latest.getLongitude(),
+                latest == null ? null : latest.getTimestamp(),
+                inRange, readings, readingsInRange, inRangePercent);
+    }
+
     private Trip getTrip(Long id) {
         return tripRepository.findDetailedById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Viagem", id));
@@ -107,5 +174,9 @@ public class TripService {
         }
         trip.setStatus(TripStatus.IN_TRANSIT);
         trip.setStartDate(LocalDateTime.now(clock));
+    }
+
+    private String normalize(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 }

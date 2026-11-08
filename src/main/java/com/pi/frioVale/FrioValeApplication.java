@@ -8,5 +8,6 @@ public class FrioValeApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(FrioValeApplication.class, args);
+        System.out.println("Projeto iniciado!");
     }
 }

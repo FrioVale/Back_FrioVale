@@ -17,6 +17,7 @@ import com.pi.frioVale.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -106,6 +107,18 @@ public class TelemetryService {
     public List<AlertResponse> getAlerts(Long tripId) {
         assertTripExists(tripId);
         return alertRepository.findByTripId(tripId).stream().map(AlertResponse::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AlertResponse> getAllAlerts() {
+        return alertRepository.findAllDetailed(PageRequest.of(0, 200)).stream()
+                .map(AlertResponse::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AlertResponse> getRecentAlerts(int limit) {
+        return alertRepository.findAllDetailed(PageRequest.of(0, Math.max(1, limit))).stream()
+                .map(AlertResponse::from).toList();
     }
 
     private void assertTripExists(Long tripId) {
